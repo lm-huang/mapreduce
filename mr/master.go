@@ -179,8 +179,29 @@ func (m *Master) allTaskDone() bool {
 	return true
 }
 
-func (m *Master) catchTimeOut() {
+func (m *Master) Done() bool {
+	mu.Lock()
+	defer mu.Unlock()
+	res := m.MasterPhase == Exit
+	return res
+}
 
+func (m *Master) catchTimeOut() {
+	for {
+		time.Sleep(5 * time.Second)
+		mu.Lock()
+		if m.MasterPhase == Exit {
+			mu.Unlock()
+			return
+		}
+		for _, masterTask := range m.TaskMeta {
+			if masterTask.TaskStatus == Inprogress && time.Now().Sub(masterTask.StartTime) > 10*time.Second {
+				m.TaskQueue <- masterTask.TaskReference
+				masterTask.TaskStatus = Idle
+			}
+		}
+		mu.Unlock()
+	}
 }
 
 func max(a, b int) int {
